@@ -1,5 +1,6 @@
 window.addEventListener('load', () => {
   initDT(); // Initialize the DatatTable and window.columnNames variables
+  addDarkmodeWidget();
 
   Options.loadAndShow();
 
@@ -32,6 +33,10 @@ document.getElementById('form').addEventListener('submit', e => {
 
 let running = false;
 
+function addDarkmodeWidget() {
+  new Darkmode( { label: '🌓' } ).showWidget();
+}
+
 function fetchData() {
   if (running) {
     running = false;
@@ -39,7 +44,7 @@ function fetchData() {
   }
   Runner.start();
 
-  const repo = document.getElementById('q').value;
+  const repo = document.getElementById('q').value.replaceAll(' ','');
   const re = /[-_\w]+\/[-_.\w]+/;
 
   const urlRepo = getRepoFromUrl();
@@ -71,7 +76,7 @@ function updateDT(data) {
   const forks = [];
   for (let fork of data) {
     fork.repoLink = `<a href="https://github.com/${fork.full_name}">Link</a>`;
-    fork.ownerName = fork.owner.login;
+    fork.ownerName = `<img src="${fork.owner.avatar_url || 'https://avatars.githubusercontent.com/u/0?v=4'}&s=48" width="24" height="24" class="mr-2 rounded-circle" />${fork.owner ? fork.owner.login : '<strike><em>Unknown</em></strike>'}`;
     forks.push(fork);
   }
   const dataSet = forks.map(fork =>
@@ -148,7 +153,7 @@ function initDT() {
 async function fetchAndShow(repo) {
   repo = repo.replace('https://github.com/', '');
   repo = repo.replace('http://github.com/', '');
-  repo = repo.replace('.git', '');
+  repo = repo.replace(/\.git$/, '');
 
   const token = document.getElementById('token').value;
   localStorage.setItem('token', token);
