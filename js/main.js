@@ -76,7 +76,7 @@ function updateDT(data) {
   const forks = [];
   for (let fork of data) {
     fork.repoLink = `<a href="https://github.com/${fork.full_name}">Link</a>`;
-    fork.ownerName = `<img src="${fork.owner.avatar_url || 'https://avatars.githubusercontent.com/u/0?v=4'}&s=48" width="24" height="24" class="mr-2 rounded-circle" />${fork.owner ? fork.owner.login : '<strike><em>Unknown</em></strike>'}`;
+    fork.ownerName = fork.owner.login;
     forks.push(fork);
   }
   const dataSet = forks.map(fork =>
