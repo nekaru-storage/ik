@@ -154,6 +154,10 @@ async function fetchAndShow(repo) {
   repo = repo.replace('https://github.com/', '');
   repo = repo.replace('http://github.com/', '');
   repo = repo.replace(/\.git$/, '');
+  repo = repo.replace(/^\s+/, '');
+  repo = repo.replace(/\s+$/, '');
+  repo = repo.replace(/^\/+/, '');
+  repo = repo.replace(/\/+$/, '');
 
   const token = document.getElementById('token').value;
   localStorage.setItem('token', token);
