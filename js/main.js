@@ -1,5 +1,6 @@
 window.addEventListener('load', () => {
-  initDT(); // Initialize the DatatTable and window.columnNames variables
+  initDT(); // Initialize the DataTable and window.columnNames variables
+
   addDarkmodeWidget();
 
   Options.loadAndShow();
@@ -13,9 +14,9 @@ window.addEventListener('load', () => {
     if (token)
       document.getElementById('token').value = token;
     else {
-      const authToken = getQueryVariableFromUrl("authToken");
-      if (authToken) {
-        document.getElementById('token').value = authToken;
+    const authToken = getQueryVariableFromUrl("authToken");
+    if (authToken) {
+      document.getElementById('token').value = authToken;
       }
     }
   } catch {}
@@ -34,7 +35,7 @@ document.getElementById('form').addEventListener('submit', e => {
 let running = false;
 
 function addDarkmodeWidget() {
-  new Darkmode( { label: '🌓' } ).showWidget();
+  new Darkmode({ label: '🌓' }).showWidget();
 }
 
 function fetchData() {
@@ -44,7 +45,7 @@ function fetchData() {
   }
   Runner.start();
 
-  const repo = document.getElementById('q').value.replaceAll(' ','');
+  const repo = document.getElementById('q').value.replaceAll(' ', '');
   const re = /[-_\w]+\/[-_.\w]+/;
 
   const urlRepo = getRepoFromUrl();
@@ -142,12 +143,12 @@ function initDT() {
       { width: '120px', targets: 8 }, // date
     ],
     order: [[sortColumnIdx, 'desc']],
-    createdRow: function(row, _, index) {
+    createdRow: function (row, _, index) {
       $('[data-toggle=popover]', row).popover();
       if (index === 0)
         row.classList.add('original-repo');
-    }
-  });
+      }
+    });
 }
 
 async function fetchAndShow(repo) {
@@ -159,8 +160,13 @@ async function fetchAndShow(repo) {
   repo = repo.replace(/^\/+/, '');
   repo = repo.replace(/\/+$/, '');
 
-  const token = document.getElementById('token').value;
-  localStorage.setItem('token', token);
+  const token = document.getElementById('token').value.replaceAll(' ', '');
+  if (token) {
+    localStorage.setItem('token', token);
+  } else {
+    localStorage.removeItem('token');
+  }
+
   const api = Api(token);
 
   const data = [];
@@ -206,6 +212,11 @@ async function fetchAndShow(repo) {
   try {
     updateDT(data);
   } catch (error) {
+    const msg =
+      error.toString().indexOf('Forbidden') >= 0
+        ? 'Error: API Rate Limit Exceeded'
+        : error;
+    showMsg(`${msg}. Additional info in console`, 'danger');
     console.error(error);
   }
 }
@@ -293,7 +304,7 @@ async function fetchMoreDir(repo, originalBranch, fork, fromOriginal, api) {
     : `https://api.github.com/repos/${repo}/compare/${originalBranch}...${fork.owner.login}:${fork.default_branch}`;
 
   const limiter = data => ({
-    commits: data.commits.map(c => ({
+      commits: data.commits.map(c => ({
       sha: c.sha.substr(0, 6),
       commit: {
         author: {
@@ -327,9 +338,9 @@ function printInfo(sep, data, fork) {
         c.author_date = c.commit.author.date.replace('Z', '').replace('T', ' ');
         c.author_login = c.author && c.author.login ? c.author.login : '-';
         const sha = c.sha.substr(0, 6);
-        c.link = `<a href="https://github.com/${fork.owner.login}/${fork.name}/commit/${sha}">${sha}</a>`
+        c.link = `<a href="https://github.com/${fork.owner.login}/${fork.name}/commit/${sha}">${sha}</a>`;
         return c;
-       })
+      })
       .map(c => `${c.link} ${c.author_date.substr(0, 10)} ${c.author_login} - ${c.commit.message}`)
       .map(s => s.replace(/[\n\r]/g, ' ').substr(0, 150))
       .join('\n')
@@ -376,12 +387,18 @@ function Quota(api) {
 function Api(token) {
   const config = token
     ? {
+      method: 'GET',
       headers: {
-        authorization: "token " + token
+        'Content-Type': 'application/json',
+        'Authorization': 'Token ' + token,
       }
     }
+    // : undefined;
+    // Work with no token provided. (Limits data availability.)
     : {
+      method: 'GET',
       headers: {
+        'Content-Type': 'application/json',
       }
     };
 
@@ -396,7 +413,7 @@ function Api(token) {
   async function get(url, fnResponseLimiter) {
     try {
       const { cached, newConfig } = cache.get(url, config);
-        
+
       // 202211 skip fething if cached
       if ( cached ) {
         return cached.data
@@ -464,7 +481,7 @@ function ApiCache() {
         if (cachedString)
           map.set(key, cachedString);
       }
-    } catch {}
+    } catch { }
 
     const cached = JSON.parse(cachedString);
     if (cached) {
@@ -494,12 +511,12 @@ function ApiCache() {
 }
 
 const Runner = {
-  start: function() {
+  start: function () {
     running = true;
     $('#find .find-label').text('Stop');
     $('#find #spinner').addClass('d-inline-block');
   },
-  stop: function() {
+  stop: function () {
     running = false;
     $('#find .find-label').text('Find');
     $('#find #spinner').removeClass('d-inline-block');
@@ -508,7 +525,7 @@ const Runner = {
 
 const Options = {
 
-  loadAndShow: function() {
+  loadAndShow: function () {
     $('#options')
       .on('show.bs.collapse', () => $('.options-button').addClass('options-button--expanded'))
       .on('hide.bs.collapse', () => $('.options-button').removeClass('options-button--expanded'));
@@ -521,10 +538,10 @@ const Options = {
       $('#sameSize').attr('checked', saved.sameSize);
       $('#samePushDate').attr('checked', saved.samePushDate);
       $('#maxRecords').val(saved.maxRecords);
-    } catch {}
+    } catch { }
   },
 
-  getAndSave: function() {
+  getAndSave: function () {
     const sameSize = $('#sameSize').is(':checked');
     const samePushDate = $('#samePushDate').is(':checked');
     const maxRecords = $('#maxRecords').val();
@@ -532,7 +549,7 @@ const Options = {
     const val = { sameSize, samePushDate, maxRecords };
     try {
       localStorage.setItem('options', JSON.stringify(val));
-    } catch {}
+    } catch { }
     return val;
   }
 };
