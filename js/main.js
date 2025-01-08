@@ -197,7 +197,7 @@ async function fetchAndShow(repo) {
     let page = 1;
     while (data.length - 1 < maxRecords) {
       const url = `https://api.github.com/repos/${repo}/forks?sort=newest&per_page=${maxRecords}&page=${page}`;
-      const someData = await api.fetch(url, multiLimiter);
+      const someData = await api.fetch(url, multiLimiter, { mode: 'no-cors' });
 
       if (someData.length === 0) break;
       data.push(...someData);
@@ -391,7 +391,8 @@ function Api(token) {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Token ' + token,
-      }
+      },
+      mode: 'cors'
     }
     // : undefined;
     // Work with no token provided. (Limits data availability.)
@@ -399,7 +400,8 @@ function Api(token) {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-      }
+      },
+      mode: 'cors'
     };
 
   const rate = {
