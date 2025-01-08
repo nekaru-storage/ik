@@ -92,9 +92,8 @@ function updateDT(data) {
 function initDT() {
   // Create ordered Object with column name and mapped display name
   window.columnNamesMap = [
-    // [ 'Repository', 'full_name' ],
-    ['Link', 'repoLink'], // custom key
-    ['Owner', 'ownerName'], // custom key
+    ['Link', 'repoLink'],
+    ['Owner', 'ownerName'],
     ['Name', 'name'],
     ['Branch', 'default_branch'],
     ['Stars', 'stargazers_count'],
@@ -112,43 +111,41 @@ function initDT() {
     .map(pair => pair[0])
     .indexOf(sortColName);
 
-  // Use first index for readable column name
-  // we use moment's fromNow() if we are rendering for `pushed_at`; better solution welcome
-  window.forkTable = $('#forkTable').DataTable({
-    columns: window.columnNamesMap.map(colNM => {
-      return {
-        title: colNM[0],
-        render: (data, type, _row) => {
-          switch (colNM[1]) {
+  // Initialize DataTable with version 2 configuration
+  window.forkTable = new DataTable('#forkTable', {
+    columns: window.columnNamesMap.map(colNM => ({
+      title: colNM[0],
+      data: colNM[1],
+      render: (data, type, _row) => {
+        switch (colNM[1]) {
+          case 'pushed_at':
+            return type === 'display'
+              ? moment(data).format('YYYY-MM-DD')
+              : data;
 
-            case 'pushed_at':
-              return type === 'display'
-                ? moment(data).format('YYYY-MM-DD')
-                : data;
+          case 'diff_from_original':
+          case 'diff_to_original':
+            return type === 'display'
+              ? data
+              : data.substr(4, 4);
 
-            case 'diff_from_original':
-            case 'diff_to_original':
-              return type === 'display'
-                ? data
-                : data.substr(4, 4);
-
-            default:
-              return data;
-          }
+          default:
+            return data;
         }
-      };
-    }),
+      }
+    })),
     columnDefs: [
-      { className: 'dt-right', targets: [4, 5, 6, 7, 9, 10] }, // numbers
-      { width: '120px', targets: 8 }, // date
+      { className: 'dt-right', targets: [4, 5, 6, 7, 9, 10] },
+      { width: '120px', targets: 8 }
     ],
     order: [[sortColumnIdx, 'desc']],
-    createdRow: function (row, _, index) {
+    createdRow: (row, _, index) => {
       $('[data-toggle=popover]', row).popover();
-      if (index === 0)
-        row.classList.add('original-repo');
+      if (index === 0) {
+        $(row).addClass('original-repo');
       }
-    });
+    }
+  });
 }
 
 async function fetchAndShow(repo) {
