@@ -76,13 +76,24 @@ function updateDT(data) {
   // Format dataset and redraw DataTable. Use second index for key name
   const forks = [];
   for (let fork of data) {
-    if (fork && fork.status !== 404) {
-      if (fork.message === 'Not Found') {
-        continue;
+    // Skip invalid forks or those with error messages
+    if (!fork || 
+        fork.status === 404 || 
+        fork.message === 'Not Found' ||
+        fork.message?.includes('No common ancestor')) {
+      continue;
+    }
+
+    try {
+      // Only add forks with valid owner and full_name
+      if (fork.owner && fork.full_name) {
+        fork.repoLink = `<a href="https://github.com/${fork.full_name}">Link</a>`;
+        fork.ownerName = fork.owner.login;
+        forks.push(fork);
       }
-      fork.repoLink = `<a href="https://github.com/${fork.full_name}">Link</a>`;
-      fork.ownerName = fork.owner.login;
-      forks.push(fork);
+    } catch (err) {
+      console.error('Error processing fork:', err);
+      continue;
     }
   }
   const dataSet = forks.map(fork =>
@@ -353,12 +364,13 @@ async function fetchMoreDir(endpoint, fork, fromOriginal, api) {
     }
   } catch (error) {
     const sortPrefix = '<!--0000-->';
-    const errorMessage = error.message?.includes('No common ancestor') ? 'No common history' : '0';
+    const errorMessage = error.message?.includes('No common ancestor') || error.status === 404 ? 'No common history' : '0';
     if (fromOriginal) {
       fork.diff_from_original = `${sortPrefix}${errorMessage}`;
     } else {
       fork.diff_to_original = `${sortPrefix}${errorMessage}`;
     }
+    console.warn(`Compare failed for ${fork.full_name}: ${error.message}`);
   }
 }
 
