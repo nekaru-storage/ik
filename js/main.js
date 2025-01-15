@@ -289,20 +289,23 @@ async function updateData(repo, originalBranch, forks, api) {
 }
 
 async function fetchMore(repo, originalBranch, fork, api) {
+  // Using Promise.all for parallel requests with updated API endpoints
   return Promise.all([
-    fetchMoreDir(repo, originalBranch, fork, true, api),
-    fetchMoreDir(repo, originalBranch, fork, false, api)
+    fetchMoreDir(`repos/${repo}/compare/${fork.owner.login}:${fork.default_branch}...${originalBranch}`, fork, true, api),
+    fetchMoreDir(`repos/${repo}/compare/${originalBranch}...${fork.owner.login}:${fork.default_branch}`, fork, false, api)
   ]);
 }
 
-async function fetchMoreDir(repo, originalBranch, fork, fromOriginal, api) {
-  const url = fromOriginal
-    ? `https://api.github.com/repos/${repo}/compare/${fork.owner.login}:${fork.default_branch}...${originalBranch}`
-    : `https://api.github.com/repos/${repo}/compare/${originalBranch}...${fork.owner.login}:${fork.default_branch}`;
+async function fetchMoreDir(endpoint, fork, fromOriginal, api) {
+  const baseUrl = 'https://api.github.com';
+  const headers = {
+    'Accept': 'application/vnd.github.v3+json',
+    'X-GitHub-Api-Version': '2022-11-28'
+  };
 
   const limiter = data => ({
-      commits: data.commits.map(c => ({
-      sha: c.sha.substr(0, 6),
+    commits: data.commits.map(c => ({
+      sha: c.sha.substring(0, 7), // Updated to 7 characters for modern Git SHA display
       commit: {
         author: {
           date: c.commit.author.date
@@ -310,46 +313,69 @@ async function fetchMoreDir(repo, originalBranch, fork, fromOriginal, api) {
         message: c.commit.message
       },
       author: {
-        login: c.author ? c.author.login : undefined
+        login: c.author?.login
       }
     }))
   });
-  const data = await api.fetch(url, limiter);
 
-  if (data !== null) {
-    if (fromOriginal)
-      fork.diff_from_original = printInfo('-', data, fork);
-    else
-      fork.diff_to_original = printInfo('+', data, fork);
+  try {
+    const data = await api.fetch(`${baseUrl}/${endpoint}`, limiter, { headers });
+    if (data) {
+      const diffInfo = printInfo(fromOriginal ? '-' : '+', data, fork);
+      if (fromOriginal) {
+        fork.diff_from_original = diffInfo;
+      } else {
+        fork.diff_to_original = diffInfo;
+      }
+    }
+  } catch (error) {
+    const sortPrefix = '<!--0000-->';
+    const errorMessage = error.message?.includes('No common ancestor') ? 'No common history' : '0';
+    if (fromOriginal) {
+      fork.diff_from_original = `${sortPrefix}${errorMessage}`;
+    } else {
+      fork.diff_to_original = `${sortPrefix}${errorMessage}`;
+    }
   }
 }
 
 function printInfo(sep, data, fork) {
-  const length = data.commits.length;
-  if (length === 0)
-    return '0';
+  const commits = data.commits;
+  if (!commits.length) return '0';
 
   const details = '<pre>' +
-    data.commits
+    commits
       .map(c => {
-        c.author_date = c.commit.author.date.replace('Z', '').replace('T', ' ');
-        c.author_login = c.author && c.author.login ? c.author.login : '-';
-        const sha = c.sha.substr(0, 6);
-        c.link = `<a href="https://github.com/${fork.owner.login}/${fork.name}/commit/${sha}">${sha}</a>`;
-        return c;
+        const date = new Date(c.commit.author.date).toISOString().split('T')[0];
+        const sha = c.sha;
+        return {
+          link: `<a href="https://github.com/${fork.owner.login}/${fork.name}/commit/${sha}">${sha}</a>`,
+          date,
+          author: c.author?.login ?? '-',
+          message: c.commit.message.split('\n')[0].trim().substring(0, 100)
+        };
       })
-      .map(c => `${c.link} ${c.author_date.substr(0, 10)} ${c.author_login} - ${c.commit.message}`)
-      .map(s => s.replace(/[\n\r]/g, ' ').substr(0, 150))
+      .map(c => `${c.link} ${c.date} ${c.author} - ${c.message}`)
       .join('\n')
-      .replace(/&/g, '&amp;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;') +
+      .replace(/[<>&"']/g, char => ({
+        '<': '&lt;',
+        '>': '&gt;',
+        '&': '&amp;',
+        '"': '&quot;',
+        "'": '&apos;'
+      }[char])) +
     '</pre>';
 
-  const sort = `<!--${('000' + length).substr(-4)}-->`;
-  return `${sort}<a tabindex="0" class="btn btn-sm btn-outline-secondary" data-toggle="popover" data-trigger="focus" data-html="true" data-placement="bottom" title="Commits" data-content="${details}">${sep}${length}</a>`;
+  const commitCount = commits.length;
+  const sortPrefix = `<!--${commitCount.toString().padStart(4, '0')}-->`;
+  
+  return `${sortPrefix}<a tabindex="0" class="btn btn-sm btn-outline-secondary" 
+    data-toggle="popover" 
+    data-trigger="focus" 
+    data-html="true" 
+    data-placement="bottom" 
+    title="Commits" 
+    data-content="${details}">${sep}${commitCount}</a>`;
 }
 
 function Progress(max) {
