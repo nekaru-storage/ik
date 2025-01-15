@@ -170,23 +170,29 @@ async function fetchAndShow(repo) {
   try {
     const maxRecords = Options.getAndSave().maxRecords;
 
-    const singleLimiter = fork => ({
-      full_name: fork.full_name,
-      name: fork.name,
-      default_branch: fork.default_branch,
-      stargazers_count: fork.stargazers_count,
-      forks: fork.forks,
-      open_issues_count: fork.open_issues_count,
-      size: fork.size,
-      pushed_at: fork.pushed_at,
-      owner: {
-        login: fork.owner.login
-      }
-    });
+    const singleLimiter = fork => {
+      if (!fork) return null;
+      return {
+        full_name: fork.full_name,
+        name: fork.name,
+        default_branch: fork.default_branch,
+        stargazers_count: fork.stargazers_count,
+        forks: fork.forks,
+        open_issues_count: fork.open_issues_count,
+        size: fork.size,
+        pushed_at: fork.pushed_at,
+        owner: fork.owner ? {
+          login: fork.owner.login
+        } : null
+      };
+    };
 
-    const multiLimiter = data => data.map(singleLimiter);
+    const multiLimiter = data => data.filter(item => item).map(singleLimiter).filter(item => item !== null);
 
     const originalRepo = await api.fetch(`https://api.github.com/repos/${repo}`, singleLimiter);
+    if (!originalRepo) {
+      throw new Error('Repository not found or access denied');
+    }
     originalRepo.diff_from_original = originalRepo.diff_to_original = '0';
     const originalBranch = originalRepo.default_branch;
     data.push(originalRepo);
@@ -201,27 +207,32 @@ async function fetchAndShow(repo) {
         }
       });
 
-      if (someData.length === 0) break;
+      if (!someData || someData.length === 0) break;
       data.push(...someData);
       ++page;
     }
 
-    await updateData(repo, originalBranch, data.slice(1), api);
+    const validForks = data.slice(1).filter(fork => fork !== null);
+    await updateData(repo, originalBranch, validForks, api);
   } catch (error) {
-    console.error(error);
+    console.error('Fetch error:', error);
+    showMsg(`Error: ${error.message || 'An error occurred while fetching data'}`, 'danger');
+    return;
   }
 
   try {
-    // Filter out null entries (404 responses) before updating
-    const validData = data.filter(item => item !== null);
+    const validData = data.filter(item => item !== null && item !== undefined);
+    if (validData.length === 0) {
+      showMsg('No valid repository data found', 'danger');
+      return;
+    }
     updateDT(validData);
   } catch (error) {
-    const msg =
-      error.toString().indexOf('Forbidden') >= 0
-        ? 'Error: API Rate Limit Exceeded'
-        : error;
-    showMsg(`${msg}. Additional info in console`, 'danger');
-    console.error(error);
+    console.error('Data processing error:', error);
+    const msg = error.toString().includes('Forbidden')
+      ? 'Error: API Rate Limit Exceeded'
+      : `Error: ${error.message || 'An error occurred while processing data'}`;
+    showMsg(msg, 'danger');
   }
 }
 
