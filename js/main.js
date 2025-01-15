@@ -194,7 +194,12 @@ async function fetchAndShow(repo) {
     let page = 1;
     while (data.length - 1 < maxRecords) {
       const url = `https://api.github.com/repos/${repo}/forks?sort=newest&per_page=${maxRecords}&page=${page}`;
-      const someData = await api.fetch(url, multiLimiter, { mode: 'no-cors' });
+      const someData = await api.fetch(url, multiLimiter, {
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      });
 
       if (someData.length === 0) break;
       data.push(...someData);
