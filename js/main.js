@@ -126,8 +126,8 @@ function initDT() {
           case 'diff_from_original':
           case 'diff_to_original':
             return type === 'display'
-              ? data
-              : data.substr(4, 4);
+              ? data || ''
+              : data ? data.substr(4, 4) : '0000';
 
           default:
             return data;
@@ -212,7 +212,9 @@ async function fetchAndShow(repo) {
   }
 
   try {
-    updateDT(data);
+    // Filter out null entries (404 responses) before updating
+    const validData = data.filter(item => item !== null);
+    updateDT(validData);
   } catch (error) {
     const msg =
       error.toString().indexOf('Forbidden') >= 0
