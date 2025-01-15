@@ -70,43 +70,102 @@ function fetchData() {
 }
 
 function updateDT(data) {
-  // Remove any alerts, if any:
-  if ($('.alert')) $('.alert').remove();
+  // Remove any alerts
+  $('.alert').remove();
 
-  // Format dataset and redraw DataTable. Use second index for key name
-  const forks = [];
-  for (let fork of data) {
-    // Skip invalid forks or those with error messages
-    if (!fork || 
-        fork.status === 404 || 
-        fork.message === 'Not Found' ||
-        fork.message?.includes('No common ancestor')) {
-      continue;
+  // Process and validate forks data
+  const processedForks = processForkData(data);
+  
+  if (processedForks.length === 0) {
+    showMsg('No valid repository data found', 'danger');
+    return;
+  }
+
+  // Update the table with processed data
+  updateTableData(processedForks);
+}
+
+function processForkData(data) {
+  return data.reduce((acc, fork) => {
+    // Skip invalid forks
+    if (!isValidFork(fork)) {
+      return acc;
     }
 
     try {
-      // Only add forks with valid owner and full_name
-      if (fork.owner && fork.full_name) {
-        fork.repoLink = `<a href="https://github.com/${fork.full_name}">Link</a>`;
-        fork.ownerName = fork.owner.login;
-        forks.push(fork);
+      const processedFork = createForkObject(fork);
+      if (processedFork) {
+        acc.push(processedFork);
       }
     } catch (err) {
-      console.error('Error processing fork:', err);
-      continue;
+      console.error('Error processing fork:', err, fork);
     }
-  }
-  const dataSet = forks.map(fork =>
-    window.columnNamesMap.map(colNM => fork[colNM[1]])
+    return acc;
+  }, []);
+}
+
+function isValidFork(fork) {
+  return fork && 
+         fork.status !== 404 && 
+         fork.owner &&
+         fork.full_name &&
+         !fork.message?.includes('Not Found') &&
+         !fork.message?.includes('No common ancestor');
+}
+
+function createForkObject(fork) {
+  // Define default values for all possible fields
+  const defaultFork = {
+    repoLink: '',
+    ownerName: '',
+    name: '',
+    default_branch: '',
+    stargazers_count: 0,
+    forks: 0,
+    open_issues_count: 0,
+    size: 0,
+    pushed_at: null,
+    diff_from_original: '',
+    diff_to_original: ''
+  };
+
+  // Create fork object with defaults
+  const processedFork = {
+    ...defaultFork,
+    repoLink: fork.full_name ? `<a href="https://github.com/${fork.full_name}">Link</a>` : '',
+    ownerName: fork.owner?.login || '',
+    name: fork.name || '',
+    default_branch: fork.default_branch || '',
+    stargazers_count: fork.stargazers_count || 0,
+    forks: fork.forks || 0,
+    open_issues_count: fork.open_issues_count || 0,
+    size: fork.size || 0,
+    pushed_at: fork.pushed_at || null,
+    diff_from_original: fork.diff_from_original || '',
+    diff_to_original: fork.diff_to_original || ''
+  };
+
+  return processedFork;
+}
+
+function updateTableData(forks) {
+  const dataSet = forks.map(fork => 
+    window.columnNamesMap.map(([_, key]) => {
+      const value = fork[key];
+      return value !== undefined ? value : '';
+    })
   );
+
   window.forkTable
     .clear()
     .rows.add(dataSet)
     .draw();
 }
 
+
+
 function initDT() {
-  // Create ordered Object with column name and mapped display name
+  // Column definitions with proper data handling
   window.columnNamesMap = [
     ['Link', 'repoLink'],
     ['Owner', 'ownerName'],
@@ -118,50 +177,65 @@ function initDT() {
     ['Size', 'size'],
     ['Last Push', 'pushed_at'],
     ['Diff Behind', 'diff_from_original'],
-    ['Diff Ahead', 'diff_to_original'],
+    ['Diff Ahead', 'diff_to_original']
   ];
 
-  // Sort by stars:
-  const sortColName = 'Stars';
-  const sortColumnIdx = window.columnNamesMap
-    .map(pair => pair[0])
-    .indexOf(sortColName);
+  // Create column definitions with proper rendering
+  const columns = window.columnNamesMap.map(([title, key]) => ({
+    title,
+    data: key,
+    defaultContent: '',
+    render: (data, type, row) => renderColumnData(data, type, key)
+  }));
 
-  // Initialize DataTable with version 2 configuration
+  // Initialize DataTable with improved configuration
   window.forkTable = new DataTable('#forkTable', {
-    columns: window.columnNamesMap.map(colNM => ({
-      title: colNM[0],
-      data: colNM[1],
-      render: (data, type, _row) => {
-        switch (colNM[1]) {
-          case 'pushed_at':
-            return type === 'display'
-              ? moment(data).format('YYYY-MM-DD')
-              : data;
-
-          case 'diff_from_original':
-          case 'diff_to_original':
-            return type === 'display'
-              ? data || ''
-              : data ? data.substr(4, 4) : '0000';
-
-          default:
-            return data;
-        }
-      }
-    })),
+    columns,
     columnDefs: [
       { className: 'dt-right', targets: [4, 5, 6, 7, 9, 10] },
       { width: '120px', targets: 8 }
     ],
-    order: [[sortColumnIdx, 'desc']],
-    createdRow: (row, _, index) => {
+    order: [[4, 'desc']], // Sort by stars by default
+    createdRow: (row, data, index) => {
+      // Enable popovers for the row
       $('[data-toggle=popover]', row).popover();
+      // Highlight original repo
       if (index === 0) {
         $(row).addClass('original-repo');
       }
-    }
+    },
+    // Add error handling for missing data
+    language: {
+      emptyTable: 'No repository data available',
+      zeroRecords: 'No matching repositories found'
+    },
+    // Improve performance
+    deferRender: true,
+    processing: true
   });
+}
+
+function renderColumnData(data, type, key) {
+  if (data === null || data === undefined) {
+    return '';
+  }
+
+  switch (key) {
+    case 'pushed_at':
+      return type === 'display' && data
+        ? moment(data).format('YYYY-MM-DD')
+        : data;
+
+    case 'diff_from_original':
+    case 'diff_to_original':
+      return type === 'display'
+        ? data || ''
+        : data ? data.substr(4, 4) : '0000';
+
+
+    default:
+      return data;
+  }
 }
 
 async function fetchAndShow(repo) {
