@@ -82,7 +82,10 @@ function updateDT(data) {
   }
 
   // Update the table with processed data
-  updateTableData(processedForks);
+  window.forkTable
+    .clear()
+    .rows.add(processedForks)
+    .draw();
 }
 
 function processForkData(data) {
@@ -114,24 +117,7 @@ function isValidFork(fork) {
 }
 
 function createForkObject(fork) {
-  // Define default values for all possible fields
-  const defaultFork = {
-    repoLink: '',
-    ownerName: '',
-    name: '',
-    default_branch: '',
-    stargazers_count: 0,
-    forks: 0,
-    open_issues_count: 0,
-    size: 0,
-    pushed_at: null,
-    diff_from_original: '',
-    diff_to_original: ''
-  };
-
-  // Create fork object with defaults
-  const processedFork = {
-    ...defaultFork,
+  return {
     repoLink: fork.full_name ? `<a href="https://github.com/${fork.full_name}">Link</a>` : '',
     ownerName: fork.owner?.login || '',
     name: fork.name || '',
@@ -144,8 +130,6 @@ function createForkObject(fork) {
     diff_from_original: fork.diff_from_original || '',
     diff_to_original: fork.diff_to_original || ''
   };
-
-  return processedFork;
 }
 
 function updateTableData(forks) {
@@ -180,17 +164,43 @@ function initDT() {
     ['Diff Ahead', 'diff_to_original']
   ];
 
-  // Create column definitions with proper rendering
-  const columns = window.columnNamesMap.map(([title, key]) => ({
-    title,
-    data: key,
-    defaultContent: '',
-    render: (data, type, row) => renderColumnData(data, type, key)
-  }));
-
   // Initialize DataTable with improved configuration
   window.forkTable = new DataTable('#forkTable', {
-    columns,
+    columns: window.columnNamesMap.map(([title, key]) => ({
+      title: title,
+      data: key,
+      defaultContent: '',
+      render: (data, type, row) => {
+        if (data === null || data === undefined) {
+          return '';
+        }
+
+        switch (key) {
+          case 'pushed_at':
+            return type === 'display' && data
+              ? moment(data).format('YYYY-MM-DD')
+              : data;
+
+          case 'diff_from_original':
+          case 'diff_to_original':
+            if (!data) return '';
+            return type === 'display' 
+              ? data
+              : data.substr(4, 4);
+
+          case 'stargazers_count':
+          case 'forks':
+          case 'open_issues_count':
+          case 'size':
+            return type === 'display'
+              ? data.toLocaleString()
+              : data;
+
+          default:
+            return data;
+        }
+      }
+    })),
     columnDefs: [
       { className: 'dt-right', targets: [4, 5, 6, 7, 9, 10] },
       { width: '120px', targets: 8 }
@@ -204,12 +214,10 @@ function initDT() {
         $(row).addClass('original-repo');
       }
     },
-    // Add error handling for missing data
     language: {
       emptyTable: 'No repository data available',
       zeroRecords: 'No matching repositories found'
     },
-    // Improve performance
     deferRender: true,
     processing: true
   });
